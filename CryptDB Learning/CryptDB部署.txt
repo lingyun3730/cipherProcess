@@ -1,0 +1,280 @@
+﻿@5207?zmkm!
+
+
+
+
+[http://css.csail.mit.edu/cryptdb/]
+
+[Install]
+
+1、设置更新源
+sudo cp /etc/apt/sources.list /etc/apt/sources.list_backup
+sudo vi /etc/apt/sources.list
+-----14.04
+deb http://ftp.sjtu.edu.cn/ubuntu/ trusty main multiverse restricted universe
+deb http://ftp.sjtu.edu.cn/ubuntu/ trusty-backports main multiverse restricted universe
+deb http://ftp.sjtu.edu.cn/ubuntu/ trusty-proposed main multiverse restricted universe
+deb http://ftp.sjtu.edu.cn/ubuntu/ trusty-security main multiverse restricted universe
+deb http://ftp.sjtu.edu.cn/ubuntu/ trusty-updates main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ trusty main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ trusty-backports main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ trusty-proposed main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ trusty-security main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ trusty-updates main multiverse restricted universe
+-----12.04
+deb http://ftp.sjtu.edu.cn/ubuntu/ precise main multiverse restricted universe
+deb http://ftp.sjtu.edu.cn/ubuntu/ precise-backports main multiverse restricted universe
+deb http://ftp.sjtu.edu.cn/ubuntu/ precise-proposed main multiverse restricted universe
+deb http://ftp.sjtu.edu.cn/ubuntu/ precise-security main multiverse restricted universe
+deb http://ftp.sjtu.edu.cn/ubuntu/ precise-updates main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ precise main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ precise-backports main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ precise-proposed main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ precise-security main multiverse restricted universe
+deb-src http://ftp.sjtu.edu.cn/ubuntu/ precise-updates main multiverse restricted universe
+-----
+sudo apt-get update
+
+2、安装git/ruby/m4
+sudo apt-get install git ruby m4
+
+3、安装2.x.x版本的bison
+sudo dpkg -i libbison-dev_2.5.dfsg-2.1_amd64.deb
+sudo dpkg -i bison_2.5.dfsg-2.1_amd64.deb
+
+4、解压cryptdb.tar.gz
+cd ~
+sudo tar -zxvf cryptdb.tar.gz
+
+5、修改/scripts/install.rb不自动更新bison[删除其中的bison]
+sudo vi ~/cryptdb/scripts/install.rb
+
+6、安装CrpytDB
+cd ~/cryptdb
+sudo ./scripts/install.rb .
+
+7、设置环境变量[添加到文件末尾,linuxuser换成当前用户]
+vi ~/.bashrc
+-----
+export EDBDIR=/home/entronous/cryptdb/
+-----
+source ~/.bashrc
+
+[Usage]
+1、启用proxy [启动后会占用shell, 不要用sudo]
+-----
+/home/bob/cryptdb/bins/proxy-bin/bin/mysql-proxy \
+	--plugins=proxy --event-threads=4 \
+	--max-open-files=1024 \
+	--proxy-lua-script=$EDBDIR/mysqlproxy/wrapper.lua \
+	--proxy-address=192.168.58.100:3307 \
+	--proxy-backend-addresses=192.168.58.100:3306
+
+
+
+-----
+/home/rootagent/cryptdb/bins/proxy-bin/bin/mysql-proxy \
+	--plugins=proxy --event-threads=4 \
+	--max-open-files=1024 \
+	--proxy-lua-script=$EDBDIR/mysqlproxy/wrapper.lua \
+	--proxy-address=127.0.0.1:3307 \
+	--proxy-backend-addresses=202.120.39.21:3306
+
+2、连接到CryptDB [开新的shell,注意密码letmein与-p间没有空格]
+mysql -u root -pletmein -h 192.168.58.100 -P 3307
+mysql -u root -pletmein -h 127.0.0.1 -P 3307
+
+3、CryptDB的使用
+参考
+[~/cryptdb/doc/notes/demo_notes.txt]
+[http://tec.5lulu.com/detail/104dan2aaryiz85f1.html]
+
+[Usage2: entrenous通过在entrenous上的代理, 访问alice上面的mysql数据库,目前测试只支持一个加密数据库,因此alice上若存在老的不为entrenous服务的cryptdb先删掉]
+1、alice为开启entrenous开启访问权限
+1.1、修改alice上mysql绑定ip地址
+sudo vi /etc/mysql/my.cnf
+-----
+[mysqld]
+bind-address 127.0.0.1 ---> the real ip address 192.168.58.100
+-----
+sudo service mysql restart
+
+1.2、授权外来ip的root用户有权限访问本机(alice)mysql
+mysqladmin -u root -pletmein password 'letmein' % letmein为cryptdb默认口令, 可通过代码修改
+mysql -u root -p
+mysql> grant all privileges on *.* to 'root'@'%' identified by 'letmein';
+mysql> exit;
+mysql -u root -pletmein -h 192.168.58.100 -P 3306 % check if privileges granting is ok
+
+1.3、为本机(alice)mysql安装UDF[如果alice本机已经安装过就忽略该步骤]
+-----
+get a copy of cryptdb folder
+-----
+cd ~/cryptdb/
+touch conf/config.mk
+make udf
+sudo install -m 644 -g mysql -o mysql ./obj/udf/edb.so /usr/lib/mysql/plugin
+mysql -u root -p < udf/create.sql % 好像sql语法出错了,暂未解决, 直接安装cryptdb吧
+
+2、entrenous启用proxy [启动后会占用shell, 不要用sudo, '10.189.159.65'为alice的ip]
+/home/entronous/cryptdb/bins/proxy-bin/bin/mysql-proxy \
+	--plugins=proxy --event-threads=4 \
+	--max-open-files=1024 \
+	--proxy-lua-script=$EDBDIR/mysqlproxy/wrapper.lua \
+	--proxy-address=127.0.0.1:3307 \
+	--proxy-backend-addresses=192.168.58.129:3306
+
+3、在entrenous机器上通过entrenous的代理连接到alice的CryptDB [开新的shell]
+mysql -u root -pletmein -h 127.0.0.1 -P 3307
+
+4、使用alice上的CryptDB
+参考
+[~/cryptdb/doc/notes/demo_notes.txt]
+Single-principal demo:
+
+* in  proxy shell:
+mysql-proxy --plugins=proxy --event-threads=4 --max-open-files=1024 --proxy-lua-script=$EDBDIR/../mysqlproxy/wrapper.lua --proxy-address=127.0.0.1:3307 --proxy-backend-addresses=localhost:3306
+* in plain shell: drop database cryptdbtest; create database cryptdbtest; use cryptdbtest;
+* in demo shell: mysql -u root -pletmein -h 127.0.0.1 -P 3307 cryptdbtest
+
+CREATE TABLE t1 (id integer,uid integer,name text, salary integer);
+
+INSERT INTO t1 VALUES (1,2, 'alice', 100);
+INSERT INTO t1 VALUES (2,2,'bob', 200);
+INSERT INTO t1 VALUES (0,1, 'chris', 0);
+INSERT INTO t1 VALUES (4,4,'dan dennis', 0);
+SELECT * FROM t1;
+(plain: select * from table0;)
+SELECT * FROM t1 WHERE id = 1;
+SELECT name, salary FROM t1 WHERE salary > 0;
+SELECT sum(salary) FROM t1 WHERE salary > 0;
+(plain: SELECT field1SWP from table0;)
+SELECT name FROM t1 WHERE name ILIKE 'dennis';
+
+others:
+SELECT * FROM t1 ORDER BY name;
+SELECT count(*) FROM t1 GROUP BY salary;
+DELETE FROM t1 WHERE id = 1;
+(plain: select * from table0;)
+DROP TABLE t1;
+
+CREATE TABLE t2 (id integer);
+INSERT INTO t2 VALUES (2);
+
+SELECT * FROM t1, t2 WHERE t1.id = t2.id;
+
+
+Multi-principal demo:
+
+export CRYPTDB_MODE=multi -->sets either to single or multi principle
+
+-- make sure allDefaultEncrypted in EDBProxy.hh is set to false and then make
+
+CREATE TABLE msgs (msgid equals privmsg.msgid integer, msgtext encfor msgid text);
+CREATE TABLE privmsg (msgid integer, recid equals u_mess.userid speaksfor msgid integer, senderid speaksfor msgid integer);
+CREATE TABLE u_mess (userid equals privmsg.senderid integer, username givespsswd userid text);
+(log in Alice:)
+INSERT INTO pwdcryptdb__u_mess (username, psswd) VALUES ('alice', 'secretalice');
+(log in Bob:)
+INSERT INTO pwdcryptdb__u_mess (username, psswd) VALUES ('bob', 'secretbob');
+INSERT INTO u_mess VALUES (1, 'alice');
+INSERT INTO u_mess VALUES (2, 'bob');
+INSERT INTO privmsg (5, 1, 2);
+
+INSERT INTO msgs VALUES (5, 'secret message');
+(log off Bob:)
+DELETE FROM pwdcryptdb__u_mess WHERE username = 'bob';
+SELECT * FROM msgs; --> should be able to see secret message
+(log off Alice similarly to above)
+SELECT * FROM msgs; --> should not be able to see secret message any more because none of the users with access to it are logged in
+(log in Alice as above)
+SELECT * FROM msgs; --> should be able to see the secret message
+
+复制文件的命令scp：
+scp 
+
+
+
+
+测试访问：
+
+创建数据库：
+192.168.58.100:5000/todo/api/v1.0/CreateDB?host=192.168.58.100&user=root&passwd=letmein&port=3307&dbname=dlt_debug_3
+创建数据表：
+202.120.39.21:5000/todo/api/v1.0/CreateTable?host=127.0.0.1&user=root&passwd=letmein&port=3307&dbname=dlt_debug_3&tablename=name&tableColumns=id integer,uid integer,name text, salary integer
+加密查询：
+192.168.58.100:5000/todo/api/v1.0/QueryWithEncryption?host=192.168.58.100&user=root&passwd=letmein&port=3307&dbname=dlt_debug_3&tablename=name&field=*&condition=where id=1
+插入内容：
+192.168.58.100:5000/todo/api/v1.0/Insert?host=192.168.58.100&user=root&passwd=letmein&port=3307&dbname=dlt_debug_3&tablename=name&field=1,2,"ff",6789
+更新内容：
+192.168.58.100:5000/todo/api/v1.0/Update?host=192.168.58.100&user=root&passwd=letmein&port=3307&dbname=dlt_debug_3&tablename=name&field=name="dlt"&condition=id=1
+同台加密：
+202.120.39.21:5000/todo/api/v1.0/HomEncryption?value=23
+
+测试使用接口：
+挂上代理：
+/home/rootagent/cryptdb/bins/proxy-bin/bin/mysql-proxy \
+	--plugins=proxy --event-threads=4 \
+	--max-open-files=1024 \
+	--proxy-lua-script=$EDBDIR/mysqlproxy/wrapper.lua \
+	--proxy-address=127.0.0.1:3307 \
+	--proxy-backend-addresses=202.120.39.21:3306
+
+1、创建数据表：
+数据库名称：test4
+字段名：
+name  text(字符型）
+id    integer(无符号整型）
+salary integer(整型）
+uid    integer(无符号整型）
+
+2、插入操作：
+数据表名：test3
+字段-数据：
+name="wangwu"
+id =1
+salary =4000
+uid=4
+
+name="lisi"
+id=2
+salary=5000
+uid =5
+
+name="zhangsan"
+id=3
+salary=7000
+uid=6
+
+	
+3、更新操作：
+
+数据表名：test3
+字段/数据：
+salary=8000
+条件：
+id=1
+
+4、查询：
+
+数据表名：test3
+字段：
+*
+条件：where id=1
+
+
+so=ctypes.cdll.LoadLibrary
+lib=so("./libSemiHomo.so")
+
+
+202.120.39.21:5000/todo/api/v1.0/HomCalculateWithEncryption?first=99B5A8BE938D6A66AB8F45C17102AD0034B3D6292E95B2F5872F9A1D3F8686DF7218508A626566BD1D390BB727EA5CCEBA554F4C6F8D5AAB0F82DFBDF056FE4815CC98BFA492D1E3E808EFC245A9BF611994C5E8B51CA437528AE8577BFE3C0B1AB279123187F027F9F21596CE1B9F8412477047C1527FA03E839488F5690515:6231EC1C5AF0E5E2C69E878DF2CEAC13AB2272D32D3941B02AA45333FE5B8D67F2BF93BC1DAFE254DEA4E2E79C5BF972627F2BB7D8887451969FF85C73F2E247FDFC524730ACEE9297BF719FE46A9D679E7F535EF8A22CBA3A5C00AE27E00ABE9A8CE247D8DDC2A14BD6047FEC68C01EE65A73CBFB5C9FAB4ABEEC008FD39FE6:E1&second=99B5A8BE938D6A66AB8F45C17102AD0034B3D6292E95B2F5872F9A1D3F8686DF7218508A626566BD1D390BB727EA5CCEBA554F4C6F8D5AAB0F82DFBDF056FE4815CC98BFA492D1E3E808EFC245A9BF611994C5E8B51CA437528AE8577BFE3C0B1AB279123187F027F9F21596CE1B9F8412477047C1527FA03E839488F5690515:3322A2755071F713AFBD5A8A2ABC38CBE9A3E52EBF01DA2B3162D1E3229EDBA97F64902797ECB7A256FD75DD77C39EF5DBDECAC03F6CD3FEB6C429D1171413649544EB97FF5CE0664E012E2DA3BD1765F9E875BBBFE117C64AFB840A2CA53778AD29824DB2ADB4981A0E2E32799573A9D581553E53BEADC6F196F1151BE20A31:E1&type=ADDITION
+
+'99B5A8BE938D6A66AB8F45C17102AD0034B3D6292E95B2F5872F9A1D3F8686DF7218508A626566BD1D390BB727EA5CCEBA554F4C6F8D5AAB0F82DFBDF056FE4815CC98BFA492D1E3E808EFC245A9BF611994C5E8B51CA437528AE8577BFE3C0B1AB279123187F027F9F21596CE1B9F8412477047C1527FA03E839488F5690515:3322A2755071F713AFBD5A8A2ABC38CBE9A3E52EBF01DA2B3162D1E3229EDBA97F64902797ECB7A256FD75DD77C39EF5DBDECAC03F6CD3FEB6C429D1171413649544EB97FF5CE0664E012E2DA3BD1765F9E875BBBFE117C64AFB840A2CA53778AD29824DB2ADB4981A0E2E32799573A9D581553E53BEADC6F196F1151BE20A31:E1'
+
+202.120.39.21:5000/todo/api/v1.0/Login?USER=ZHANGSAN&PWD=123456
+
+202.120.39.21:5000/todo/api/v1.0/QueryAveData?field=Xdata
+
+202.120.39.21:5000/todo/api/v1.0/InsertExecuteTime?type='ADD'&TimeSpanInfo='[{"同态加密1":12.556},{"同态计算":13.5556}]'
+202.120.39.21:5000/todo/api/v1.0/QueryExecuteTime?Optype='ALL'&DateTime1='ALL'
+202.120.39.21:5000/todo/api/v1.0/QueryExecuteTime?DateTime1=ALL&Optype=ALL
