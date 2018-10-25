@@ -1,0 +1,45 @@
+1、创建数据表
+DROP TABLE IF EXISTS UserInfo;
+CREATE TABLE UserInfo(
+  USER char(30) NOT NULL primary key,
+  PWDINFO text
+)ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+DROP TABLE IF EXISTS ExpRecordLog;
+CREATE TABLE  ExpRecordLog(
+  OpType char(30),
+  OpName char(30) NOT NULL,
+  Algorithm char(30) NOT NULL,
+  Execution_time float,
+  Communication_time float,
+  DateTime timestamp not null default current_timestamp
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+DROP TABLE IF EXISTS EncData;
+CREATE TABLE EncData(
+  ID int primary key auto_increment,
+  Time timestamp not null default current_timestamp,
+  Owner char(20) NOT NULL,
+  Xdata text,
+  Ydata text
+)ENGINE=InnoDB DEFAULT CHARSET=utf8;
+ 
+2、select COLUMN_NAME from information_schema.COLUMNS where table_name = 'your_table_name'; 
+   desc tablename；
+
+
+Mysql不能插入中文
+
+三、#vim /etc/mysql/my.cnf 。(5.5以前系统)在【client】下面加入
+default-character-set=utf8
+
+在【mysqld】下面加入default-character-set=utf8
+
+Notice：注意
+如果修改后不能启动报错试试把default-character-set=utf8改为character_set_server=utf8，仅仅加入到mysqld下面的.client就不需要加了
+
+
+
+
+
